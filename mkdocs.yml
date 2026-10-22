@@ -1,0 +1,17 @@
+site_name: Addok (Rust)
+nav:
+  - index.md
+  - Installation: install.md
+  - Tutorial: tutorial.md
+  - Configuration: config.md
+  - Storage & Architecture: storage.md
+  - Import: import.md
+  - HTTP API: api.md
+  - Shell: shell.md
+  - Concepts: concepts.md
+  - Advanced: advanced.md
+  - Porting from Python Addok: porting.md
+  - FAQ: faq.md
+theme: readthedocs
+repo_url: https://github.com/carapace-foundry/addok-rs
+site_description: Search engine for address. Only address. Pure Rust high-performance engine.

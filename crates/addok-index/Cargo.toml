@@ -1,0 +1,23 @@
+[package]
+name = "addok-index"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Tantivy-based full-text address indexing, prefix autocompletion, and spatial R-Tree index for addok-rs."
+
+[dependencies]
+addok-core = { path = "../addok-core" }
+tantivy.workspace = true
+rstar.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+roaring.workspace = true
+bincode.workspace = true
+memmap2.workspace = true
+
+[dev-dependencies]
+tempfile = "3.10"

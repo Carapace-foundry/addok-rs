@@ -1,0 +1,44 @@
+[package]
+name = "addok-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Command-line interface for indexing, searching, and serving addok-rs."
+
+[lib]
+name = "addok_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "addok"
+path = "src/main.rs"
+
+[[bin]]
+name = "benchmark"
+path = "src/bin/benchmark.rs"
+
+[[bin]]
+name = "export_ndjson"
+path = "src/bin/export_ndjson.rs"
+
+[dependencies]
+addok-core = { path = "../addok-core" }
+addok-index = { path = "../addok-index" }
+addok-server = { path = "../addok-server" }
+clap.workspace = true
+tokio.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+indicatif.workspace = true
+rustyline.workspace = true
+
+[dev-dependencies]
+tempfile = "3.27"
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
