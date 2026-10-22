@@ -95,6 +95,16 @@ Test with curl:
 curl "http://localhost:7878/search/?q=8+bd+st+michel"
 ```
 
+### 🐳 Run with Docker (Zero Compilation)
+Run directly from the GitHub Container Registry:
+```bash
+# Single docker command
+docker run -d --name addok -p 7878:7878 -v ./index_data:/data/index:ro ghcr.io/carapace-foundry/addok-rs:latest
+
+# Or with Docker Compose
+docker compose up -d
+```
+
 ### 4. CLI & Interactive Shell
 ```bash
 # CLI text search

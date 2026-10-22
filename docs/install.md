@@ -54,23 +54,28 @@ Building with `cargo build --release` also compiles two high-performance benchma
 
 ## Docker Installation
 
-You can run `addok-rs` inside a minimal Docker container (using a lightweight `debian:bookworm-slim` or `scratch`/`alpine` base):
+Prebuilt multi-arch images (`linux/amd64` and `linux/arm64`) are published to the GitHub Container Registry.
 
-```dockerfile
-FROM rust:1.75 as builder
-WORKDIR /app
-COPY . .
-RUN cargo build --release
-
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/addok /usr/local/bin/addok
-EXPOSE 7878
-ENTRYPOINT ["addok"]
-CMD ["serve", "--index", "/data/index", "--host", "0.0.0.0", "--port", "7878"]
+### 1. Run with Docker CLI
+```bash
+docker run -d \
+  --name addok \
+  -p 7878:7878 \
+  -v /path/to/your/index:/data/index:ro \
+  ghcr.io/carapace-foundry/addok-rs:latest
 ```
 
-Build the container image:
+### 2. Run with Docker Compose
+Using the provided `docker-compose.yml`:
+```bash
+# Start in background
+docker compose up -d
+
+# Check health and logs
+docker compose logs -f
+```
+
+### 3. Build Your Own Image
 ```bash
 docker build -t addok-rs:latest .
 ```

@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  addok:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/carapace-foundry/addok-rs:latest
+    container_name: addok-rs
+    restart: unless-stopped
+    ports:
+      - "7878:7878"
+    volumes:
+      # Mount your host index directory to the container
+      - ./index_data:/data/index:ro
+    environment:
+      - RUST_LOG=info
+    command: ["serve", "--index", "/data/index", "--host", "0.0.0.0", "--port", "7878"]
