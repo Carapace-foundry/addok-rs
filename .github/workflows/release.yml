@@ -54,18 +54,25 @@ jobs:
           cp "target/${{ matrix.target }}/release/addok" "${STAGING}/"
           cp README.md LICENSE-MIT LICENSE-APACHE "${STAGING}/"
           tar -czvf "${STAGING}.tar.gz" "${STAGING}"
-          shasum -a 256 "${STAGING}.tar.gz" > "${STAGING}.tar.gz.sha256"
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${STAGING}.tar.gz" > "${STAGING}.tar.gz.sha256"
+          else
+            shasum -a 256 "${STAGING}.tar.gz" > "${STAGING}.tar.gz.sha256"
+          fi
 
       - name: Package archive (Windows)
         if: matrix.os == 'windows-latest'
-        shell: bash
+        shell: pwsh
         run: |
-          STAGING="addok-${{ github.ref_name }}-${{ matrix.target }}"
-          mkdir -p "${STAGING}"
-          cp "target/${{ matrix.target }}/release/addok.exe" "${STAGING}/"
-          cp README.md LICENSE-MIT LICENSE-APACHE "${STAGING}/"
-          7z a "${STAGING}.zip" "${STAGING}"
-          shasum -a 256 "${STAGING}.zip" > "${STAGING}.zip.sha256"
+          $staging = "addok-${{ github.ref_name }}-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path $staging
+          Copy-Item "target/${{ matrix.target }}/release/addok.exe" -Destination $staging
+          Copy-Item "README.md" -Destination $staging
+          Copy-Item "LICENSE-MIT" -Destination $staging
+          Copy-Item "LICENSE-APACHE" -Destination $staging
+          Compress-Archive -Path $staging -DestinationPath "$staging.zip"
+          $hash = (Get-FileHash "$staging.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $staging.zip" | Out-File -Encoding ascii "$staging.zip.sha256"
 
       - name: Upload binaries to Release
         uses: softprops/action-gh-release@v2
