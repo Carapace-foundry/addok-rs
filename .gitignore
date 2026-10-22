@@ -1,0 +1,43 @@
+# Rust / Cargo
+/target/
+**/*.rs.bk
+
+# Large BAN datasets & archives (keep sample test fixtures)
+/data/*
+!/data/sample_adresses_75.csv
+!/data/sample_adresses_75.csv.gz
+!/data/.gitkeep
+*.csv.gz
+!data/sample_adresses_75.csv.gz
+*.tar.gz
+*.zip
+*.ndjson
+
+# Index directories & runtime database files
+index_data/
+index_paris/
+/test_index*
+*.bin
+*.idx
+*.store
+*.fast
+*.pos
+*.term
+*.fieldnorm
+.tantivy*
+.managed.json
+
+# Logs & environment
+*.log
+.env
+.env.*
+!.env.example
+
+# System & IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

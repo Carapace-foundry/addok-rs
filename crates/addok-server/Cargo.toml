@@ -1,0 +1,29 @@
+[package]
+name = "addok-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "High-performance Axum HTTP API matching the official French BAN/Addok REST specification."
+
+[dependencies]
+addok-core = { path = "../addok-core" }
+addok-index = { path = "../addok-index" }
+axum = { workspace = true, features = ["macros", "multipart"] }
+tokio.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+csv.workspace = true
+rayon.workspace = true
+bytes = "1.6"
+futures-core = "0.3"
+form_urlencoded = "1.2"
+
+[dev-dependencies]
+tempfile = "3.8"
+tower = { workspace = true, features = ["util"] }
+http-body-util = "0.1"

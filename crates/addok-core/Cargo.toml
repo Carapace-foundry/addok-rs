@@ -1,0 +1,20 @@
+[package]
+name = "addok-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Core data structures, streaming BAN parser, and French address text normalizer for addok-rs."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+deunicode.workspace = true
+csv.workspace = true
+flate2.workspace = true
+tracing.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile = "3.10"
