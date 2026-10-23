@@ -124,7 +124,7 @@ impl SpatialIndex {
     ) -> Vec<SpatialResult> {
         let query_point = [lon, lat];
         self.tree
-            .nearest_neighbor_iter(&query_point)
+            .nearest_neighbor_iter(query_point)
             .filter(|item| {
                 if let Some(types) = type_filter {
                     if !types.is_empty()
@@ -175,7 +175,7 @@ impl SpatialIndex {
     ) -> Vec<SpatialResult> {
         let query_point = [lon, lat];
         let mut results = Vec::new();
-        for item in self.tree.nearest_neighbor_iter(&query_point) {
+        for item in self.tree.nearest_neighbor_iter(query_point) {
             let dist = haversine_distance_meters(lat, lon, item.point[1], item.point[0]);
             if dist <= max_distance_meters {
                 results.push(SpatialResult {
