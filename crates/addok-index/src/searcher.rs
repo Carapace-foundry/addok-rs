@@ -700,7 +700,8 @@ impl AddokSearcher {
             params.limit
         };
 
-        let top_docs = searcher.search(&query, &TopDocs::with_limit(fetch_limit).order_by_score())?;
+        let top_docs =
+            searcher.search(&query, &TopDocs::with_limit(fetch_limit).order_by_score())?;
         if top_docs.is_empty() {
             return Ok(Vec::new());
         }
