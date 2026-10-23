@@ -6,7 +6,7 @@ use addok_core::document::Document;
 use addok_core::BanRecord;
 use tantivy::collector::TopDocs;
 use tantivy::query::{BooleanQuery, BoostQuery, Occur, Query, QueryParser, TermQuery};
-use tantivy::schema::{IndexRecordOption, OwnedValue, Term};
+use tantivy::schema::{IndexRecordOption, Term, Value};
 use tantivy::{Index, IndexReader, ReloadPolicy, TantivyDocument};
 
 use crate::collector::BucketCollector;
@@ -700,7 +700,8 @@ impl AddokSearcher {
             params.limit
         };
 
-        let top_docs = searcher.search(&query, &TopDocs::with_limit(fetch_limit))?;
+        let top_docs =
+            searcher.search(&query, &TopDocs::with_limit(fetch_limit).order_by_score())?;
         if top_docs.is_empty() {
             return Ok(Vec::new());
         }
@@ -810,7 +811,7 @@ impl AddokSearcher {
     }
 
     fn extract_record(&self, doc: &TantivyDocument) -> Option<BanRecord> {
-        if let Some(OwnedValue::Str(payload_str)) = doc.get_first(self.schema.payload) {
+        if let Some(payload_str) = doc.get_first(self.schema.payload).and_then(|v| v.as_str()) {
             if let Ok(record) = serde_json::from_str::<BanRecord>(payload_str) {
                 return Some(record);
             }
@@ -855,16 +856,10 @@ impl AddokSearcher {
         doc: &'a TantivyDocument,
         field: tantivy::schema::Field,
     ) -> Option<&'a str> {
-        doc.get_first(field).and_then(|val| match val {
-            OwnedValue::Str(s) => Some(s.as_str()),
-            _ => None,
-        })
+        doc.get_first(field).and_then(|val| val.as_str())
     }
 
     fn get_f64(&self, doc: &TantivyDocument, field: tantivy::schema::Field) -> Option<f64> {
-        doc.get_first(field).and_then(|val| match val {
-            OwnedValue::F64(n) => Some(*n),
-            _ => None,
-        })
+        doc.get_first(field).and_then(|val| val.as_f64())
     }
 }
