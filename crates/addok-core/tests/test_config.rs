@@ -1,9 +1,13 @@
 use addok_core::{AddokConfig, FieldConfig};
 use std::fs;
+use std::sync::Mutex;
 use tempfile::NamedTempFile;
+
+static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
 fn test_config_defaults_specification() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let config = AddokConfig::default();
 
     // Verify exact defaults matching Addok default.py
@@ -49,6 +53,7 @@ fn test_config_defaults_specification() {
 
 #[test]
 fn test_config_loading_from_toml_file() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let toml_content = r#"
 bucket_min = 15
 bucket_max = 150
@@ -102,6 +107,7 @@ custom_timeout = 3000
 
 #[test]
 fn test_config_env_variable_overrides() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut config = AddokConfig::default();
 
     std::env::set_var("ADDOK_BUCKET_MIN", "35");
@@ -149,6 +155,7 @@ fn test_config_env_variable_overrides() {
 
 #[test]
 fn test_config_load_with_path_env() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let toml_content = r#"
 bucket_min = 99
 "#;
@@ -167,6 +174,7 @@ bucket_min = 99
 
 #[test]
 fn test_config_plugins_and_logging_env_overrides() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     std::env::set_var("ADDOK_PLUGINS", "addok_france, addok_csv");
     std::env::set_var("ADDOK_LOG_QUERIES", "true");
     std::env::set_var("ADDOK_SLOW_QUERIES", "250.5");
