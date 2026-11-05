@@ -2,7 +2,6 @@
 
 [![CI](https://github.com/Carapace-foundry/addok-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/Carapace-foundry/addok-rs/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-166%20passed-brightgreen)](https://github.com/Carapace-foundry/addok-rs/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-90.0%25-brightgreen)](https://github.com/Carapace-foundry/addok-rs/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/Carapace-foundry/addok-rs?color=blue&logo=github)](https://github.com/Carapace-foundry/addok-rs/releases)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 
