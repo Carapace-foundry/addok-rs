@@ -151,7 +151,7 @@ impl EdgeNgramIndex {
     /// Load index from binary file on disk using memory mapping.
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = File::open(&path)?;
-        if let Ok(mmap) = unsafe { memmap2::Mmap::map(&file) } {
+        if let Ok(mmap) = crate::mmap_util::mmap_file(&file) {
             if let Ok(index) = bincode::deserialize::<Self>(&mmap) {
                 return Ok(index);
             }

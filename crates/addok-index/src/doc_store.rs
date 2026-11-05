@@ -107,7 +107,7 @@ impl DocumentStore {
     /// with fallback to serde_json for backward compatibility.
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = File::open(&path)?;
-        if let Ok(mmap) = unsafe { memmap2::Mmap::map(&file) } {
+        if let Ok(mmap) = crate::mmap_util::mmap_file(&file) {
             if let Ok(store) = serde_json::from_slice::<Self>(&mmap) {
                 return Ok(store);
             }

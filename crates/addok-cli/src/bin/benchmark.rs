@@ -1,3 +1,5 @@
+#![deny(unsafe_code)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
