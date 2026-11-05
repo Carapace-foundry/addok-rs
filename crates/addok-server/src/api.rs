@@ -104,6 +104,15 @@ impl ApiError {
             detail: d,
         }
     }
+
+    pub fn internal_error(detail: impl Into<String>) -> Self {
+        let d = detail.into();
+        Self {
+            error_type: "internal_error".to_string(),
+            error: d.clone(),
+            detail: d,
+        }
+    }
 }
 
 impl FeatureCollection {

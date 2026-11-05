@@ -5,6 +5,7 @@ pub mod fields_index;
 pub mod filters;
 pub mod housenumbers;
 pub mod indexer;
+pub mod mmap_util;
 pub mod ngram;
 pub mod pairs;
 pub mod query;

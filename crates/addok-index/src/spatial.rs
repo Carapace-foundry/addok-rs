@@ -206,7 +206,7 @@ impl SpatialIndex {
     /// Load the spatial index from a file (JSON) using memory mapping
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = File::open(&path)?;
-        if let Ok(mmap) = unsafe { memmap2::Mmap::map(&file) } {
+        if let Ok(mmap) = crate::mmap_util::mmap_file(&file) {
             if let Ok(items) = serde_json::from_slice::<Vec<SpatialItem>>(&mmap) {
                 return Ok(Self::from_items(items));
             }
@@ -229,7 +229,7 @@ impl SpatialIndex {
     /// Load the spatial index from a binary file (bincode) using memory mapping
     pub fn load_from_bin<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = File::open(&path)?;
-        if let Ok(mmap) = unsafe { memmap2::Mmap::map(&file) } {
+        if let Ok(mmap) = crate::mmap_util::mmap_file(&file) {
             if let Ok(items) = bincode::deserialize::<Vec<SpatialItem>>(&mmap) {
                 return Ok(Self::from_items(items));
             }

@@ -269,9 +269,8 @@ fn extract_housenumber_and_street(
 
     // Determine autocomplete prefix:
     // If autocomplete plugin enabled and the last token was a street token (and not a housenumber)
-    let autocomplete_prefix =
-        if config.has_autocomplete() && !last_token_is_hn && !street_tokens.is_empty() {
-            let last = street_tokens.last().unwrap();
+    let autocomplete_prefix = if config.has_autocomplete() && !last_token_is_hn {
+        if let Some(last) = street_tokens.last() {
             if last.len() >= config.min_edge_ngrams {
                 Some(last.clone())
             } else {
@@ -279,7 +278,10 @@ fn extract_housenumber_and_street(
             }
         } else {
             None
-        };
+        }
+    } else {
+        None
+    };
 
     (housenumber, postcode, street_tokens, autocomplete_prefix)
 }

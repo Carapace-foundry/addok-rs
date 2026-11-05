@@ -8,7 +8,7 @@ use addok_index::{km_to_score, AddokSearcher, SearchHit, SearchParams, SpatialRe
 use anyhow::Result;
 use axum::{
     body::Body,
-    extract::{Multipart, RawQuery, State},
+    extract::{DefaultBodyLimit, Multipart, RawQuery, State},
     http::{header, Method, StatusCode},
     response::{IntoResponse, Json, Response},
     routing::{get, post},
@@ -480,6 +480,7 @@ pub fn create_router(state: AppState) -> Router {
     }
 
     router
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
         .layer(axum::middleware::from_fn(cors_middleware))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -1161,7 +1162,19 @@ async fn search_csv_handler(
             .into_response();
     }
     let _ = header_writer.flush();
-    let header_bytes = bytes::Bytes::from(header_writer.into_inner().unwrap());
+    let header_bytes = match header_writer.into_inner() {
+        Ok(buf) => bytes::Bytes::from(buf),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::internal_error(format!(
+                    "CSV serialization error: {}",
+                    e
+                ))),
+            )
+                .into_response();
+        }
+    };
 
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<bytes::Bytes, std::io::Error>>(16);
     let _ = tx.send(Ok(header_bytes)).await;
@@ -1272,7 +1285,10 @@ async fn search_csv_handler(
                     writer.write_record(&row).map_err(std::io::Error::other)?;
                 }
                 writer.flush().map_err(std::io::Error::other)?;
-                Ok::<bytes::Bytes, std::io::Error>(bytes::Bytes::from(writer.into_inner().unwrap()))
+                let inner = writer
+                    .into_inner()
+                    .map_err(|e| std::io::Error::other(e.to_string()))?;
+                Ok::<bytes::Bytes, std::io::Error>(bytes::Bytes::from(inner))
             })
             .await;
 
@@ -1308,7 +1324,13 @@ async fn search_csv_handler(
             "X-Requested-With, Content-Type, Accept",
         )
         .body(body)
-        .unwrap()
+        .unwrap_or_else(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to build response: {}", e),
+            )
+                .into_response()
+        })
 }
 
 /// High-Performance Streaming CSV Batch Reverse Geocoding: `POST /reverse/csv/`
@@ -1555,7 +1577,19 @@ async fn reverse_csv_handler(
             .into_response();
     }
     let _ = header_writer.flush();
-    let header_bytes = bytes::Bytes::from(header_writer.into_inner().unwrap());
+    let header_bytes = match header_writer.into_inner() {
+        Ok(buf) => bytes::Bytes::from(buf),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::internal_error(format!(
+                    "CSV serialization error: {}",
+                    e
+                ))),
+            )
+                .into_response();
+        }
+    };
 
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<bytes::Bytes, std::io::Error>>(16);
     let _ = tx.send(Ok(header_bytes)).await;
@@ -1683,7 +1717,10 @@ async fn reverse_csv_handler(
                     writer.write_record(&row).map_err(std::io::Error::other)?;
                 }
                 writer.flush().map_err(std::io::Error::other)?;
-                Ok::<bytes::Bytes, std::io::Error>(bytes::Bytes::from(writer.into_inner().unwrap()))
+                let inner = writer
+                    .into_inner()
+                    .map_err(|e| std::io::Error::other(e.to_string()))?;
+                Ok::<bytes::Bytes, std::io::Error>(bytes::Bytes::from(inner))
             })
             .await;
 
@@ -1719,7 +1756,13 @@ async fn reverse_csv_handler(
             "X-Requested-With, Content-Type, Accept",
         )
         .body(body)
-        .unwrap()
+        .unwrap_or_else(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to build response: {}", e),
+            )
+                .into_response()
+        })
 }
 
 /// `/metrics` Prometheus metrics endpoint
@@ -1753,7 +1796,13 @@ async fn metrics_handler() -> impl IntoResponse {
         )
         .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
         .body(Body::from(body))
-        .unwrap()
+        .unwrap_or_else(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to build response: {}", e),
+            )
+                .into_response()
+        })
 }
 
 /// `/health` health check loyal to Addok

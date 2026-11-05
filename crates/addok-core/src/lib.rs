@@ -1,3 +1,5 @@
+#![deny(unsafe_code)]
+
 pub mod aggregation;
 pub mod ban;
 pub mod config;
