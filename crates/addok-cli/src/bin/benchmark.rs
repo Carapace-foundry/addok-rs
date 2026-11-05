@@ -98,25 +98,35 @@ fn benchmark_dataset(
     println!("⏱️  Cold startup time:     {:.2} ms", cold_startup_ms);
     println!("🧠 Process RAM (RSS):      {:.2} MB", ram_rss_mb);
 
+    let is_smoke = std::env::var("BENCH_SMOKE").is_ok()
+        || std::env::args().any(|a| a == "--smoke" || a == "--quick");
+    let warmup_count = if is_smoke { 5 } else { 200 };
+    let single_count = if is_smoke { 20 } else { 5000 };
+    let target_queries = if is_smoke { 50 } else { 20_000 };
+    let reverse_count = if is_smoke { 20 } else { 5000 };
+
     let searcher = Arc::new(searcher);
 
-    // Warm-up: 200 queries
-    for q in text_queries.iter().cycle().take(200) {
+    // Warm-up queries
+    for q in text_queries.iter().cycle().take(warmup_count) {
         let _ = searcher.search(&SearchParams::new(*q).with_limit(5));
     }
 
     // 2. Single-threaded latency measurement
-    println!("\n📊 Measuring single-thread latency profile (5,000 queries)...");
-    let mut latencies: Vec<f64> = Vec::with_capacity(5000);
+    println!(
+        "\n📊 Measuring single-thread latency profile ({} queries)...",
+        single_count
+    );
+    let mut latencies: Vec<f64> = Vec::with_capacity(single_count);
     let run_start = Instant::now();
 
-    for q in text_queries.iter().cycle().take(5000) {
+    for q in text_queries.iter().cycle().take(single_count) {
         let t0 = Instant::now();
         let _ = searcher.search(&SearchParams::new(*q).with_limit(5))?;
         latencies.push(t0.elapsed().as_secs_f64() * 1000.0);
     }
     let duration_secs = run_start.elapsed().as_secs_f64();
-    let single_thread_qps = 5000.0 / duration_secs;
+    let single_thread_qps = single_count as f64 / duration_secs;
 
     latencies.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let n = latencies.len();
@@ -142,12 +152,11 @@ fn benchmark_dataset(
         .map(|p| p.get())
         .unwrap_or(8);
     println!(
-        "\n🔥 Measuring multi-threaded throughput ({} worker threads, 20,000 queries)...",
-        num_threads
+        "\n🔥 Measuring multi-threaded throughput ({} worker threads, {} queries)...",
+        num_threads, target_queries
     );
 
     let counter = Arc::new(AtomicUsize::new(0));
-    let target_queries = 20_000;
     let mut handles = Vec::new();
 
     let mt_start = Instant::now();
@@ -177,17 +186,20 @@ fn benchmark_dataset(
     );
 
     // 4. Reverse Geocoding Benchmark
-    println!("\n📍 Measuring Reverse Geocoding performance (R-Tree, 5,000 lookups)...");
-    let mut rev_latencies = Vec::with_capacity(5000);
+    println!(
+        "\n📍 Measuring Reverse Geocoding performance (R-Tree, {} lookups)...",
+        reverse_count
+    );
+    let mut rev_latencies = Vec::with_capacity(reverse_count);
     let rev_start = Instant::now();
 
-    for &(lat, lon) in reverse_coords.iter().cycle().take(5000) {
+    for &(lat, lon) in reverse_coords.iter().cycle().take(reverse_count) {
         let t0 = Instant::now();
         let _ = searcher.reverse(lat, lon, 1);
         rev_latencies.push(t0.elapsed().as_secs_f64() * 1000.0);
     }
     let rev_duration = rev_start.elapsed().as_secs_f64();
-    let reverse_qps = 5000.0 / rev_duration;
+    let reverse_qps = reverse_count as f64 / rev_duration;
 
     rev_latencies.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let rn = rev_latencies.len();
@@ -204,7 +216,7 @@ fn benchmark_dataset(
         disk_size_mb,
         cold_startup_ms,
         ram_rss_mb,
-        total_queries: 5000,
+        total_queries: single_count,
         duration_secs,
         p50_ms,
         p90_ms,
@@ -322,11 +334,28 @@ fn main() -> Result<()> {
         (46.1325, 4.9143),  // Ain
     ];
 
+    // Determine index path from args or default
+    let args: Vec<String> = std::env::args().collect();
+    let default_paris_index = {
+        let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
+        let candidate = Path::new(&manifest).join("../../index_paris");
+        if candidate.exists() {
+            candidate
+        } else {
+            PathBuf::from("index_paris")
+        }
+    };
+    let paris_index_path = args
+        .iter()
+        .skip(1)
+        .find(|a| !a.starts_with('-'))
+        .map(PathBuf::from)
+        .unwrap_or(default_paris_index);
+
     // Run Paris Benchmark
-    let paris_index = Path::new("index_paris");
     let paris_stats = benchmark_dataset(
         "PARIS (Department 75)",
-        paris_index,
+        &paris_index_path,
         &paris_queries,
         &paris_coords,
     )?;

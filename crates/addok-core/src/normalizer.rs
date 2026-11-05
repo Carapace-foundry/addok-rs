@@ -776,10 +776,18 @@ mod tests {
 
     #[test]
     fn test_clean_query() {
+        assert_eq!(clean_query(""), "");
         assert_eq!(clean_query("8 bd st michel cedex 05"), "8 bd st michel");
         assert_eq!(clean_query("Neuilly s/ Seine"), "Neuilly sur Seine");
         assert_eq!(clean_query("Boulogne s/s Bois"), "Boulogne sous Bois");
         assert_eq!(clean_query("BP 42 10 rue de la paix"), "10 rue de la paix");
+        assert_eq!(clean_query("bp n° 123 rue de la paix"), "rue de la paix");
+        assert_eq!(clean_query("cs no 40001 avenue foch"), "avenue foch");
+        assert_eq!(
+            clean_query("tsa 10001 boulevard saint michel"),
+            "boulevard saint michel"
+        );
+        assert_eq!(clean_query("cidex 500 chemin vert"), "chemin vert");
         assert_eq!(
             clean_query("lieu-dit les grands champs"),
             "les grands champs"
@@ -787,6 +795,36 @@ mod tests {
         assert_eq!(
             clean_query("12 rue victor hugo 2eme etage"),
             "12 rue victor hugo"
+        );
+        assert_eq!(
+            clean_query("10 rue de la paix 1er étage"),
+            "10 rue de la paix"
+        );
+    }
+
+    #[test]
+    fn test_fold_ordinal_and_remove_leading_zeros() {
+        assert_eq!(fold_ordinal("3bis"), "3b");
+        assert_eq!(fold_ordinal("10ter"), "10t");
+        assert_eq!(fold_ordinal("2quater"), "2q");
+        assert_eq!(fold_ordinal("1quinquies"), "1c");
+        assert_eq!(fold_ordinal("bistrot"), "bistrot");
+        assert_eq!(fold_ordinal("terminer"), "terminer");
+
+        assert_eq!(remove_leading_zeros("0003"), "3");
+        assert_eq!(remove_leading_zeros("00"), "0");
+        assert_eq!(remove_leading_zeros("0"), "0");
+        assert_eq!(remove_leading_zeros("75001"), "75001"); // 5 digits untouched
+        assert_eq!(remove_leading_zeros("abc"), "abc");
+    }
+
+    #[test]
+    fn test_normalize_address_empty_and_international() {
+        assert_eq!(normalize_address("", true), "");
+        assert_eq!(normalize_address("", false), "");
+        assert_eq!(
+            normalize_address("12 Wall Street, New York", false),
+            "12 wall street new york"
         );
     }
 }

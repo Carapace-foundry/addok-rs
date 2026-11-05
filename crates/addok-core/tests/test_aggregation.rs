@@ -106,3 +106,224 @@ fn test_hierarchical_reduction_metrics() {
         assert_eq!(doc.postcode.as_deref(), Some("75001"));
     }
 }
+
+#[test]
+fn test_streaming_ban_aggregator_bounded_memory_eviction() {
+    use addok_core::aggregation::StreamingBanAggregator;
+
+    // Create 120 distinct streets with 1 housenumber each
+    let records: Vec<addok_core::Result<BanRecord>> = (1..=120)
+        .map(|i| {
+            Ok(BanRecord {
+                id: format!("75101_{:04}_00001", i),
+                address_type: None,
+                numero: Some("1".to_string()),
+                rep: None,
+                nom_voie: format!("Rue Unique {}", i),
+                code_postal: "75001".to_string(),
+                code_insee: Some("75101".to_string()),
+                nom_commune: "Paris".to_string(),
+                code_insee_commune_deleguee: None,
+                nom_commune_deleguee: None,
+                x: None,
+                y: None,
+                lon: Some(2.35),
+                lat: Some(48.85),
+                type_position: None,
+                alias: None,
+                nom_afnor: None,
+                libelle_acheminement: None,
+                nom_complementaire: None,
+            })
+        })
+        .collect();
+
+    // max_active_streets is clamped to at least 100
+    let streaming = StreamingBanAggregator::new(records.into_iter(), 100);
+
+    let mut yielded = 0;
+    for res in streaming {
+        let doc = res.expect("Failed to stream document");
+        assert!(doc.id.starts_with("75101_"));
+        yielded += 1;
+    }
+
+    assert_eq!(yielded, 120);
+}
+
+#[test]
+fn test_streaming_ban_aggregator_error_propagation() {
+    use addok_core::aggregation::StreamingBanAggregator;
+    use addok_core::error::CoreError;
+
+    let items: Vec<addok_core::Result<BanRecord>> = vec![
+        Ok(BanRecord {
+            id: "75101_0001_00001".to_string(),
+            address_type: None,
+            numero: Some("1".to_string()),
+            rep: None,
+            nom_voie: "Rue de Test".to_string(),
+            code_postal: "75001".to_string(),
+            code_insee: Some("75101".to_string()),
+            nom_commune: "Paris".to_string(),
+            code_insee_commune_deleguee: None,
+            nom_commune_deleguee: None,
+            x: None,
+            y: None,
+            lon: None,
+            lat: None,
+            type_position: None,
+            alias: None,
+            nom_afnor: None,
+            libelle_acheminement: None,
+            nom_complementaire: None,
+        }),
+        Err(CoreError::InvalidDocument {
+            line: 42,
+            reason: "Corrupted record".to_string(),
+        }),
+    ];
+
+    let mut streaming = StreamingBanAggregator::new(items.into_iter(), 100);
+    // First record is buffered
+    let second = streaming.next();
+    assert!(second.is_some());
+    assert!(second.unwrap().is_err());
+}
+
+#[test]
+fn test_ban_aggregator_non_housenumber_types_and_methods() {
+    use addok_core::aggregation::BanAggregator;
+
+    let mut agg = BanAggregator::new();
+    assert!(agg.is_empty());
+    assert_eq!(agg.len(), 0);
+
+    // 1. Add Locality record
+    agg.add_record(BanRecord {
+        id: "loc_01".to_string(),
+        address_type: Some("locality".to_string()),
+        numero: None,
+        rep: None,
+        nom_voie: "Le Grand Clos".to_string(),
+        code_postal: "01000".to_string(),
+        code_insee: Some("01053".to_string()),
+        nom_commune: "Bourg-en-Bresse".to_string(),
+        code_insee_commune_deleguee: None,
+        nom_commune_deleguee: None,
+        x: None,
+        y: None,
+        lon: Some(5.22),
+        lat: Some(46.20),
+        type_position: None,
+        alias: None,
+        nom_afnor: None,
+        libelle_acheminement: None,
+        nom_complementaire: None,
+    });
+    assert_eq!(agg.len(), 1);
+    assert!(!agg.is_empty());
+    assert_eq!(
+        agg.documents()
+            .get("loc_01")
+            .unwrap()
+            .address_type
+            .as_deref(),
+        Some("locality")
+    );
+
+    // 2. Add Municipality record
+    agg.add_record(BanRecord {
+        id: "mun_01".to_string(),
+        address_type: Some("municipality".to_string()),
+        numero: None,
+        rep: None,
+        nom_voie: "".to_string(),
+        code_postal: "01000".to_string(),
+        code_insee: Some("01053".to_string()),
+        nom_commune: "Bourg-en-Bresse".to_string(),
+        code_insee_commune_deleguee: None,
+        nom_commune_deleguee: None,
+        x: None,
+        y: None,
+        lon: Some(5.22),
+        lat: Some(46.20),
+        type_position: None,
+        alias: None,
+        nom_afnor: None,
+        libelle_acheminement: None,
+        nom_complementaire: None,
+    });
+    assert_eq!(agg.len(), 2);
+
+    // 3. Update existing document when adding a street record whose ID already exists from a housenumber
+    agg.add_record(BanRecord {
+        id: "75101_0001_00008".to_string(),
+        address_type: None,
+        numero: Some("8".to_string()),
+        rep: None,
+        nom_voie: "Rue de Rivoli".to_string(),
+        code_postal: "75001".to_string(),
+        code_insee: Some("75101".to_string()),
+        nom_commune: "Paris".to_string(),
+        code_insee_commune_deleguee: None,
+        nom_commune_deleguee: None,
+        x: None,
+        y: None,
+        lon: Some(2.35),
+        lat: Some(48.85),
+        type_position: None,
+        alias: None,
+        nom_afnor: None,
+        libelle_acheminement: None,
+        nom_complementaire: None,
+    });
+    assert_eq!(agg.len(), 3);
+    assert!(agg.documents().contains_key("75101_0001"));
+
+    // Now add the street record itself for 75101_0001
+    agg.add_record(BanRecord {
+        id: "75101_0001".to_string(),
+        address_type: Some("street".to_string()),
+        numero: None,
+        rep: None,
+        nom_voie: "Rue de Rivoli".to_string(),
+        code_postal: "75001".to_string(),
+        code_insee: Some("75101".to_string()),
+        nom_commune: "Paris".to_string(),
+        code_insee_commune_deleguee: None,
+        nom_commune_deleguee: None,
+        x: None,
+        y: None,
+        lon: Some(2.35),
+        lat: Some(48.85),
+        type_position: None,
+        alias: None,
+        nom_afnor: None,
+        libelle_acheminement: None,
+        nom_complementaire: None,
+    });
+    // Document count remains 3, but street is updated with preserved housenumbers!
+    assert_eq!(agg.len(), 3);
+    let updated = agg.documents().get("75101_0001").unwrap();
+    assert_eq!(updated.housenumbers.len(), 1);
+    assert!(updated.housenumbers.contains_key("8"));
+
+    let docs = agg.into_documents();
+    assert_eq!(docs.len(), 3);
+}
+
+#[test]
+fn test_aggregate_ban_csv_reader_in_memory() {
+    use addok_core::aggregation::aggregate_ban_csv_reader;
+    use std::io::Cursor;
+
+    let csv_data = "id,nom_voie,code_postal,code_insee,nom_commune,numero,rep,lat,lon\n\
+                    75101_0001_00001,Rue de la Paix,75001,75101,Paris,1,,48.868,2.330\n\
+                    75101_0001_00002,Rue de la Paix,75001,75101,Paris,2,,48.869,2.331\n";
+
+    let reader = Box::new(Cursor::new(csv_data.as_bytes()));
+    let docs = aggregate_ban_csv_reader(reader).expect("Failed to aggregate from reader");
+    assert_eq!(docs.len(), 1);
+    assert_eq!(docs[0].housenumbers.len(), 2);
+}

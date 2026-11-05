@@ -164,3 +164,42 @@ bucket_min = 99
     // Unspecified fields remain default
     assert_eq!(loaded.bucket_max, 100);
 }
+
+#[test]
+fn test_config_plugins_and_logging_env_overrides() {
+    std::env::set_var("ADDOK_PLUGINS", "addok_france, addok_csv");
+    std::env::set_var("ADDOK_LOG_QUERIES", "true");
+    std::env::set_var("ADDOK_SLOW_QUERIES", "250.5");
+    std::env::set_var("ADDOK_LOG_NOT_FOUND", "yes");
+    std::env::set_var("ADDOK_ATTRIBUTION", "BAN Contributors");
+    std::env::set_var("ADDOK_LICENCE", "ODbL 1.0");
+    std::env::set_var("ADDOK_CUSTOM_FLOAT", "42.75");
+    std::env::set_var("ADDOK_CUSTOM_BOOL", "true");
+
+    let mut config = AddokConfig::default();
+    config.apply_env();
+
+    std::env::remove_var("ADDOK_PLUGINS");
+    std::env::remove_var("ADDOK_LOG_QUERIES");
+    std::env::remove_var("ADDOK_SLOW_QUERIES");
+    std::env::remove_var("ADDOK_LOG_NOT_FOUND");
+    std::env::remove_var("ADDOK_ATTRIBUTION");
+    std::env::remove_var("ADDOK_LICENCE");
+    std::env::remove_var("ADDOK_CUSTOM_FLOAT");
+    std::env::remove_var("ADDOK_CUSTOM_BOOL");
+
+    assert_eq!(config.plugins, vec!["addok_france", "addok_csv"]);
+    assert!(config.log_queries);
+    assert_eq!(config.slow_queries, Some(250.5));
+    assert!(config.log_not_found);
+    assert_eq!(config.attribution, "BAN Contributors");
+    assert_eq!(config.licence, "ODbL 1.0");
+    assert_eq!(
+        config.extra.get("custom_float"),
+        Some(&serde_json::json!(42.75))
+    );
+    assert_eq!(
+        config.extra.get("custom_bool"),
+        Some(&serde_json::json!(true))
+    );
+}

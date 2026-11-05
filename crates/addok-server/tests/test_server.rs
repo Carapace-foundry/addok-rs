@@ -890,3 +890,262 @@ async fn test_plugin_csv_disabled_returns_404() {
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn test_search_endpoint_query_params_permutations() {
+    let (_dir, searcher) = setup_test_index();
+    let app = create_router(AppState {
+        searcher: Arc::new(searcher),
+    });
+
+    // 1. Multiple postcodes and multiple citycodes + custom key + lng alias + autocomplete=0
+    let req = Request::builder()
+        .method("GET")
+        .uri("/search/?q=saint+michel&postcode=75005&postcode=75006&citycode=75105&citycode=75106&custom_tag=test&lat=48.85&lng=2.34&autocomplete=0")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // 2. autocomplete=false
+    let req_auto_false = Request::builder()
+        .method("GET")
+        .uri("/search/?q=saint+michel&autocomplete=false")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp_auto_false = app.clone().oneshot(req_auto_false).await.unwrap();
+    assert_eq!(resp_auto_false.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_reverse_endpoint_query_params_and_error() {
+    let (_dir, searcher) = setup_test_index();
+    let app = create_router(AppState {
+        searcher: Arc::new(searcher),
+    });
+
+    // 1. Missing lat/lon -> 400 Bad Request
+    let req_missing = Request::builder()
+        .method("GET")
+        .uri("/reverse/?lat=48.85")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp_missing = app.clone().oneshot(req_missing).await.unwrap();
+    assert_eq!(resp_missing.status(), StatusCode::BAD_REQUEST);
+
+    // 2. k alias for limit + lng alias + code_postal alias + code_insee alias + empty value
+    let req_aliases = Request::builder()
+        .method("GET")
+        .uri("/reverse/?lat=48.8512&lng=2.3431&k=2&code_postal=75005&code_insee=75105&type=")
+        .body(Body::empty())
+        .unwrap();
+
+    let resp_aliases = app.clone().oneshot(req_aliases).await.unwrap();
+    assert_eq!(resp_aliases.status(), StatusCode::OK);
+    let bytes = resp_aliases.into_body().collect().await.unwrap().to_bytes();
+    let col: FeatureCollection = serde_json::from_slice(&bytes).unwrap();
+    assert!(!col.features.is_empty());
+}
+
+#[tokio::test]
+async fn test_csv_search_multipart_all_form_fields_and_errors() {
+    let (_dir, searcher) = setup_test_index();
+    let app = create_router(AppState {
+        searcher: Arc::new(searcher),
+    });
+
+    // 1. Missing CSV in data field -> 400
+    let req_missing_data = Request::builder()
+        .method("POST")
+        .uri("/search/csv/")
+        .header(header::CONTENT_TYPE, "multipart/form-data; boundary=BOUNDARY")
+        .body(Body::from("--BOUNDARY\r\nContent-Disposition: form-data; name=\"not_data\"\r\n\r\nfoo\r\n--BOUNDARY--\r\n"))
+        .unwrap();
+
+    let resp_missing_data = app.clone().oneshot(req_missing_data).await.unwrap();
+    assert_eq!(resp_missing_data.status(), StatusCode::BAD_REQUEST);
+
+    // 2. Comprehensive form fields: result_columns (all fields), delimiter, encoding, postcode, citycode, type, lat, lon
+    let csv_content = "address;dep\n8 bd st michel;75\n";
+    let multipart_body = format!(
+        "--BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"data\"; filename=\"test.csv\"\r\n\
+         Content-Type: text/csv\r\n\r\n\
+         {}\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"columns\"\r\n\r\n\
+         address\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"result_columns\"\r\n\r\n\
+         result_name,result_street,result_context,result_score,result_type,result_housenumber,result_distance,result_latitude,result_longitude,result_id,result_citycode\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"delimiter\"\r\n\r\n\
+         ;\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"encoding\"\r\n\r\n\
+         utf-8\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"postcode\"\r\n\r\n\
+         75005\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"citycode\"\r\n\r\n\
+         75105\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"type\"\r\n\r\n\
+         housenumber\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"lat\"\r\n\r\n\
+         48.85\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"lon\"\r\n\r\n\
+         2.34\r\n\
+         --BOUNDARY--\r\n",
+        csv_content
+    );
+
+    let req_comprehensive = Request::builder()
+        .method("POST")
+        .uri("/search/csv/")
+        .header(
+            header::CONTENT_TYPE,
+            "multipart/form-data; boundary=BOUNDARY",
+        )
+        .body(Body::from(multipart_body))
+        .unwrap();
+
+    let resp_comprehensive = app.clone().oneshot(req_comprehensive).await.unwrap();
+    assert_eq!(resp_comprehensive.status(), StatusCode::OK);
+    let bytes = resp_comprehensive
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+    let csv_out = String::from_utf8_lossy(&bytes);
+    assert!(csv_out.contains("result_name"));
+    assert!(csv_out.contains("result_score"));
+    assert!(csv_out.contains("result_context"));
+    assert!(csv_out.contains("Boulevard Saint-Michel"));
+}
+
+#[tokio::test]
+async fn test_csv_reverse_multipart_all_form_fields_and_errors() {
+    let (_dir, searcher) = setup_test_index();
+    let app = create_router(AppState {
+        searcher: Arc::new(searcher),
+    });
+
+    // 1. Missing CSV in data field -> 400
+    let req_missing_data = Request::builder()
+        .method("POST")
+        .uri("/reverse/csv/")
+        .header(header::CONTENT_TYPE, "multipart/form-data; boundary=BOUNDARY")
+        .body(Body::from("--BOUNDARY\r\nContent-Disposition: form-data; name=\"not_data\"\r\n\r\nfoo\r\n--BOUNDARY--\r\n"))
+        .unwrap();
+
+    let resp_missing_data = app.clone().oneshot(req_missing_data).await.unwrap();
+    assert_eq!(resp_missing_data.status(), StatusCode::BAD_REQUEST);
+
+    // 2. Comprehensive form fields for reverse CSV
+    let csv_content = "latitude;longitude\n48.8512;2.3431\n";
+    let multipart_body = format!(
+        "--BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"data\"; filename=\"test.csv\"\r\n\
+         Content-Type: text/csv\r\n\r\n\
+         {}\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"result_columns\"\r\n\r\n\
+         result_name,result_street,result_context,result_score,result_type,result_housenumber,result_distance,result_latitude,result_longitude,result_id,result_citycode\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"delimiter\"\r\n\r\n\
+         ;\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"encoding\"\r\n\r\n\
+         utf-8\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"postcode\"\r\n\r\n\
+         75005\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"citycode\"\r\n\r\n\
+         75105\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"type\"\r\n\r\n\
+         housenumber\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"lat\"\r\n\r\n\
+         latitude\r\n\
+         --BOUNDARY\r\n\
+         Content-Disposition: form-data; name=\"lon\"\r\n\r\n\
+         longitude\r\n\
+         --BOUNDARY--\r\n",
+        csv_content
+    );
+
+    let req_comprehensive = Request::builder()
+        .method("POST")
+        .uri("/reverse/csv/")
+        .header(
+            header::CONTENT_TYPE,
+            "multipart/form-data; boundary=BOUNDARY",
+        )
+        .body(Body::from(multipart_body))
+        .unwrap();
+
+    let resp_comprehensive = app.clone().oneshot(req_comprehensive).await.unwrap();
+    assert_eq!(resp_comprehensive.status(), StatusCode::OK);
+    let bytes = resp_comprehensive
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+    let csv_out = String::from_utf8_lossy(&bytes);
+    assert!(csv_out.contains("result_name"));
+    assert!(csv_out.contains("result_distance"));
+    assert!(csv_out.contains("Boulevard Saint-Michel"));
+}
+
+#[tokio::test]
+async fn test_api_internal_error_and_feature_collection_helpers() {
+    use addok_server::api::ApiError;
+
+    let err = ApiError::internal_error("Database timeout");
+    assert_eq!(err.error_type, "internal_error");
+    assert_eq!(err.error, "Database timeout");
+    assert_eq!(err.detail, "Database timeout");
+
+    let col = FeatureCollection::from_search_hits(vec![], "empty", 5);
+    assert_eq!(col.features.len(), 0);
+    assert_eq!(col.query.as_deref(), Some("empty"));
+}
+
+#[tokio::test]
+async fn test_run_server_startup_and_health_check() {
+    let (_dir, searcher) = setup_test_index();
+    let port = 18991;
+    let addr = format!("127.0.0.1:{}", port).parse().unwrap();
+
+    let handle = tokio::spawn(async move {
+        let _ = addok_server::server::run_server(searcher, addr).await;
+    });
+
+    // Give server a moment to bind
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Connect via TcpStream and send simple HTTP GET /health
+    if let Ok(mut stream) = tokio::net::TcpStream::connect(addr).await {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let req = b"GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+        let _ = stream.write_all(req).await;
+        let mut buf = vec![0u8; 1024];
+        let n = stream.read(&mut buf).await.unwrap_or(0);
+        let resp_str = String::from_utf8_lossy(&buf[..n]);
+        assert!(resp_str.contains("200 OK"));
+        assert!(resp_str.contains("HEALTHY"));
+    }
+
+    handle.abort();
+}

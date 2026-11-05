@@ -211,4 +211,93 @@ mod tests {
         assert_eq!(record.street_and_number(), "8 bis Boulevard Saint-Michel");
         assert_eq!(record.label(), "8 bis Boulevard Saint-Michel 75005 Paris");
     }
+
+    #[test]
+    fn test_ban_type_and_defaults_derivation() {
+        // 1. Explicit address types
+        let mut rec = BanRecord {
+            id: "mun_1".to_string(),
+            address_type: Some("municipality".to_string()),
+            numero: None,
+            rep: None,
+            nom_voie: String::new(),
+            code_postal: "75001".to_string(),
+            code_insee: Some("75101".to_string()),
+            nom_commune: "Paris".to_string(),
+            code_insee_commune_deleguee: None,
+            nom_commune_deleguee: None,
+            x: None,
+            y: None,
+            lon: None,
+            lat: None,
+            type_position: None,
+            alias: None,
+            nom_afnor: None,
+            libelle_acheminement: None,
+            nom_complementaire: None,
+        };
+        assert_eq!(rec.ban_type(), BanType::Municipality);
+
+        rec.address_type = Some("locality".to_string());
+        assert_eq!(rec.ban_type(), BanType::Locality);
+
+        rec.address_type = Some("street".to_string());
+        assert_eq!(rec.ban_type(), BanType::Street);
+
+        rec.address_type = Some("housenumber".to_string());
+        assert_eq!(rec.ban_type(), BanType::Housenumber);
+
+        // 2. Infer Municipality when nom_voie is empty or equals nom_commune
+        rec.address_type = None;
+        rec.nom_voie = "  ".to_string();
+        assert_eq!(rec.ban_type(), BanType::Municipality);
+
+        rec.nom_voie = "Paris".to_string();
+        assert_eq!(rec.ban_type(), BanType::Municipality);
+
+        rec.nom_voie = "Rue de la Paix".to_string();
+        assert_eq!(rec.ban_type(), BanType::Street);
+
+        // 3. full_housenumber with blank numero or whitespace
+        rec.numero = Some("   ".to_string());
+        assert_eq!(rec.full_housenumber(), None);
+
+        rec.numero = Some("10".to_string());
+        rec.rep = None;
+        assert_eq!(rec.full_housenumber().as_deref(), Some("10"));
+
+        rec.rep = Some("ter".to_string());
+        assert_eq!(rec.full_housenumber().as_deref(), Some("10 ter"));
+
+        // 4. street_and_number & label when street part is empty
+        rec.numero = None;
+        rec.rep = None;
+        rec.nom_voie = String::new();
+        assert_eq!(rec.street_and_number(), "");
+        assert_eq!(rec.label(), "75001 Paris");
+    }
+
+    #[test]
+    fn test_lenient_json_parsing_and_deserialization() {
+        // String with comma, null, empty string
+        let raw_json = r#"{
+            "id": "75001_01",
+            "nom_voie": "Rue de Rivoli",
+            "code_postal": "75001",
+            "nom_commune": "Paris",
+            "lat": "48,8566",
+            "lon": 2.3522,
+            "x": null,
+            "y": "",
+            "numero": "  "
+        }"#;
+
+        let record: BanRecord =
+            serde_json::from_str(raw_json).expect("Failed to parse lenient JSON");
+        assert_eq!(record.lat, Some(48.8566));
+        assert_eq!(record.lon, Some(2.3522));
+        assert_eq!(record.x, None);
+        assert_eq!(record.y, None);
+        assert_eq!(record.numero, None); // empty string parsed as None
+    }
 }

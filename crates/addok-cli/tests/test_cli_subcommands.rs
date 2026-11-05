@@ -1,18 +1,21 @@
 use std::process::Command;
 use std::time::Duration;
 
-use addok_cli::shell::execute_command;
+use addok_cli::shell::{execute_command, execute_command_interactive};
 use addok_index::AddokSearcher;
 use tempfile::tempdir;
 
 fn get_bin_path() -> std::path::PathBuf {
-    // Locate the compiled `addok` binary in the cargo target directory
+    get_bin_named("addok")
+}
+
+fn get_bin_named(name: &str) -> std::path::PathBuf {
     let mut path = std::env::current_exe().unwrap();
     path.pop(); // Remove test binary name
     if path.ends_with("deps") {
         path.pop(); // Remove "deps"
     }
-    path.push("addok");
+    path.push(name);
     path
 }
 
@@ -326,4 +329,241 @@ fn test_shell_repl_all_commands_execution() {
     assert!(geo_out.contains("Haversine Geodistance & Proximity Score"));
     assert!(geo_out.contains("Great-Circle Distance"));
     assert!(geo_out.contains("Proximity Score"));
+}
+
+#[test]
+fn test_shell_interactive_and_colored_formatting_and_errors() {
+    let temp = tempdir().unwrap();
+    let index_dir = temp.path().join("test_index");
+    let bin = get_bin_path();
+    let csv = get_sample_csv_path();
+
+    let index_res = Command::new(&bin)
+        .arg("index")
+        .arg("--input")
+        .arg(&csv)
+        .arg("--output")
+        .arg(&index_dir)
+        .output()
+        .unwrap();
+    assert!(index_res.status.success());
+
+    let searcher = AddokSearcher::open(&index_dir).unwrap();
+
+    // 1. Interactive executions
+    assert!(execute_command_interactive(&searcher, "HELP").is_ok());
+    assert!(execute_command_interactive(&searcher, "SEARCH 8 bd st michel").is_ok());
+    assert!(execute_command_interactive(&searcher, "REVERSE 48.8512 2.3431").is_ok());
+
+    // 2. Empty / edge-case commands
+    let empty_search = execute_command(&searcher, "SEARCH").unwrap();
+    assert!(empty_search.contains("Usage: SEARCH <query>"));
+
+    let no_hits = execute_command(&searcher, "SEARCH unknown_address_xyz_12345").unwrap();
+    assert!(no_hits.contains("No matching address found"));
+
+    let empty_rev = execute_command(&searcher, "REVERSE").unwrap();
+    assert!(empty_rev.contains("Usage: REVERSE <lat> <lon>"));
+
+    let invalid_rev = execute_command(&searcher, "REVERSE foo bar");
+    assert!(invalid_rev.is_err());
+
+    let empty_tok = execute_command(&searcher, "TOKENIZE").unwrap();
+    assert!(empty_tok.contains("Usage: TOKENIZE <query>"));
+
+    let empty_doc = execute_command(&searcher, "DOC").unwrap();
+    assert!(empty_doc.contains("Usage: DOC <id>"));
+
+    let empty_fuzzy = execute_command(&searcher, "FUZZY").unwrap();
+    assert!(empty_fuzzy.contains("Usage: FUZZY <token>"));
+
+    let empty_pair = execute_command(&searcher, "PAIR").unwrap();
+    assert!(empty_pair.contains("Usage: PAIR <token>"));
+
+    let empty_ngram = execute_command(&searcher, "NGRAM").unwrap();
+    assert!(empty_ngram.contains("Usage: NGRAM <token>"));
+
+    let empty_freq = execute_command(&searcher, "FREQUENCY").unwrap();
+    assert!(empty_freq.contains("Usage: FREQUENCY <token>"));
+
+    let empty_geo = execute_command(&searcher, "GEODISTANCE").unwrap();
+    assert!(empty_geo.contains("Usage: GEODISTANCE"));
+
+    let invalid_geo = execute_command(&searcher, "GEODISTANCE a b c d");
+    assert!(invalid_geo.is_err());
+
+    let empty_cmd = execute_command(&searcher, "   ").unwrap();
+    assert!(empty_cmd.is_empty());
+}
+
+#[test]
+fn test_cli_reset_and_ngrams_subcommands() {
+    let temp = tempdir().unwrap();
+    let index_dir = temp.path().join("reset_test_index");
+    let bin = get_bin_path();
+    let csv = get_sample_csv_path();
+
+    // Index first
+    let index_res = Command::new(&bin)
+        .arg("index")
+        .arg("--input")
+        .arg(&csv)
+        .arg("--output")
+        .arg(&index_dir)
+        .output()
+        .unwrap();
+    assert!(index_res.status.success());
+    assert!(index_dir.exists());
+
+    // Test `addok ngrams` on existing index
+    let ngrams_out = Command::new(&bin)
+        .arg("ngrams")
+        .arg("--index")
+        .arg(&index_dir)
+        .output()
+        .unwrap();
+    assert!(ngrams_out.status.success());
+    assert!(String::from_utf8_lossy(&ngrams_out.stdout).contains("Edge n-grams index verified"));
+
+    // Test `addok reset -y`
+    let reset_out = Command::new(&bin)
+        .arg("reset")
+        .arg("--index")
+        .arg(&index_dir)
+        .arg("-y")
+        .output()
+        .unwrap();
+    assert!(reset_out.status.success());
+    assert!(!index_dir.exists());
+
+    // Test `addok reset -y` on nonexistent directory
+    let reset_again = Command::new(&bin)
+        .arg("reset")
+        .arg("--index")
+        .arg(&index_dir)
+        .arg("-y")
+        .output()
+        .unwrap();
+    assert!(reset_again.status.success());
+    assert!(String::from_utf8_lossy(&reset_again.stdout).contains("Nothing to reset"));
+
+    // Test `addok ngrams` on nonexistent index
+    let ngrams_nonexistent = Command::new(&bin)
+        .arg("ngrams")
+        .arg("--index")
+        .arg(&index_dir)
+        .output()
+        .unwrap();
+    assert!(ngrams_nonexistent.status.success());
+    assert!(String::from_utf8_lossy(&ngrams_nonexistent.stderr).contains("does not exist"));
+}
+
+#[test]
+fn test_cli_search_and_reverse_with_all_filters() {
+    let temp = tempdir().unwrap();
+    let index_dir = temp.path().join("filter_test_index");
+    let bin = get_bin_path();
+    let csv = get_sample_csv_path();
+
+    let index_res = Command::new(&bin)
+        .arg("index")
+        .arg("--input")
+        .arg(&csv)
+        .arg("--output")
+        .arg(&index_dir)
+        .output()
+        .unwrap();
+    assert!(index_res.status.success());
+
+    // Search with --lat, --lon, --limit, --postcode, --type, --citycode
+    let search_res = Command::new(&bin)
+        .arg("search")
+        .arg("8 bd st michel")
+        .arg("--index")
+        .arg(&index_dir)
+        .arg("--lat")
+        .arg("48.85")
+        .arg("--lon")
+        .arg("2.34")
+        .arg("--limit")
+        .arg("2")
+        .arg("--postcode")
+        .arg("75005")
+        .arg("--type")
+        .arg("housenumber")
+        .arg("--citycode")
+        .arg("75105")
+        .output()
+        .unwrap();
+    assert!(search_res.status.success());
+    let stdout = String::from_utf8_lossy(&search_res.stdout);
+    assert!(stdout.contains("Boulevard Saint-Michel"));
+
+    // Reverse with --limit, --type, --postcode, --citycode, and --json
+    let rev_json = Command::new(&bin)
+        .arg("reverse")
+        .arg("--lat")
+        .arg("48.8512")
+        .arg("--lon")
+        .arg("2.3431")
+        .arg("--index")
+        .arg(&index_dir)
+        .arg("--limit")
+        .arg("2")
+        .arg("--type")
+        .arg("housenumber")
+        .arg("--postcode")
+        .arg("75005")
+        .arg("--citycode")
+        .arg("75105")
+        .arg("--json")
+        .output()
+        .unwrap();
+    assert!(rev_json.status.success());
+    let rev_out = String::from_utf8_lossy(&rev_json.stdout);
+    let val: serde_json::Value = serde_json::from_str(&rev_out).unwrap();
+    assert_eq!(val["type"], "FeatureCollection");
+}
+
+#[test]
+fn test_export_ndjson_binary_execution() {
+    let bin = get_bin_named("export_ndjson");
+    let csv = get_sample_csv_path();
+    let temp = tempdir().unwrap();
+    let out_file = temp.path().join("exported.ndjson");
+
+    let status = Command::new(&bin)
+        .arg(&csv)
+        .arg(&out_file)
+        .status()
+        .expect("Failed to execute export_ndjson binary");
+
+    assert!(status.success());
+    assert!(out_file.exists());
+    let content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(!content.is_empty());
+    assert!(content.contains("Boulevard Saint-Michel"));
+}
+
+#[test]
+fn test_benchmark_binary_execution() {
+    let bin = get_bin_named("benchmark");
+    let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
+    let paris_index = std::path::Path::new(&manifest).join("../../index_paris");
+
+    if !paris_index.exists() {
+        return;
+    }
+
+    let output = Command::new(&bin)
+        .arg(&paris_index)
+        .arg("--smoke")
+        .env("BENCH_SMOKE", "1")
+        .output()
+        .expect("Failed to execute benchmark binary");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("BENCHMARK"));
+    assert!(stdout.contains("Throughput"));
 }

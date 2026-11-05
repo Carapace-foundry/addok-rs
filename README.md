@@ -1,5 +1,11 @@
 # addok-rs ⚡
 
+[![CI](https://github.com/Carapace-foundry/addok-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/Carapace-foundry/addok-rs/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-166%20passed-brightgreen)](https://github.com/Carapace-foundry/addok-rs/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Carapace-foundry/addok-rs/graph/badge.svg)](https://codecov.io/gh/Carapace-foundry/addok-rs)
+[![Version](https://img.shields.io/github/v/release/Carapace-foundry/addok-rs?color=blue&logo=github)](https://github.com/Carapace-foundry/addok-rs/releases)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+
 A high-performance, lightweight reimplementation of the [Addok](https://github.com/addok/addok) address geocoder in pure Rust.
 
 It is a **100% drop-in compatible replacement** for Python Addok that eliminates all external dependencies (no Python runtime, no Redis server) by using memory-mapped disk storage (Tantivy + binary tables).

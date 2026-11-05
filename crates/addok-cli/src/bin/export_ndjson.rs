@@ -8,8 +8,17 @@ use addok_core::aggregation::StreamingBanAggregator;
 use addok_core::parser::open_ban_csv;
 
 fn main() -> anyhow::Result<()> {
-    let input = Path::new("data/adresses-75.csv.gz");
-    let output = Path::new("/tmp/paris.ndjson");
+    let args: Vec<String> = std::env::args().collect();
+    let input_path = args
+        .get(1)
+        .map(String::as_str)
+        .unwrap_or("data/adresses-75.csv.gz");
+    let output_path = args
+        .get(2)
+        .map(String::as_str)
+        .unwrap_or("/tmp/paris.ndjson");
+    let input = Path::new(input_path);
+    let output = Path::new(output_path);
     println!("Streaming BAN records from {}...", input.display());
     let records = open_ban_csv(input)?;
     let aggregator = StreamingBanAggregator::new(records, 10_000);
