@@ -1,10 +1,8 @@
 //! Differential & Golden-Master Parity Test Suite
 //!
-//! Mandatory testing requirement (§ 4.1 in ../guidelines.md):
-//! "Maintain differential testing and golden-master regression suites comparing the
-//! Rust implementation directly against the upstream legacy project. Whenever possible,
-//! run identical test inputs through both implementations to verify bit-for-bit or
-//! field-for-field identical outputs, scoring parity, and matching edge-case behavior."
+//! Validates differential testing and golden-master regression suites comparing the
+//! Rust implementation directly against the upstream legacy project, verifying identical
+//! outputs, scoring parity, and matching edge-case behavior.
 
 use addok_core::document::{Document, HousenumberData};
 use addok_index::{AddokIndexer, AddokSearcher, IndexerConfig, SearchParams};
